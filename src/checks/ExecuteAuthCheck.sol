@@ -26,7 +26,6 @@ contract Probe {
 ///         and the owner. The check verifies EFFECT: it runs an arbitrary call as a stranger through
 ///         the account and asserts it did not execute.
 abstract contract ExecuteAuthCheck is Test {
-    address internal constant ENTRY_POINT = ENTRY_POINT_V07;
 
     function assertExecuteGated(IExecutable account) internal {
         (bool gated, string memory offender) = scanExecute(account);
@@ -43,7 +42,7 @@ abstract contract ExecuteAuthCheck is Test {
 
         // Sanity: the EntryPoint itself CAN execute through the account.
         Probe p2 = new Probe();
-        vm.prank(ENTRY_POINT);
+        vm.prank(ENTRY_POINT_V07);
         account.execute(address(p2), 0, abi.encodeCall(Probe.poke, ()));
         require(p2.poked(), "SETUP: EntryPoint cannot execute through the account");
 
