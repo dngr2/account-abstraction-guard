@@ -59,12 +59,36 @@ contract MyAccountSig is UserOpSignatureCheck {
 byte and asserts the account returns `SIG_VALIDATION_FAILED`. The reference pair proves it: the
 no-signature account validates a forged UserOp; the correct one rejects a non-owner signature.
 
+### 3. Paymaster safety  ✅ available
+
+**The three ways a paymaster gets drained or griefed.** A paymaster pays gas for other people's
+user ops, and three implementation mistakes turn that into a loss: `validatePaymasterUserOp` not
+gated to the EntryPoint (anyone drives sponsorship logic), `validatePaymasterUserOp` sponsoring an
+unbounded `maxCost` (one crafted op drains the whole EntryPoint deposit), and a `postOp` that can
+revert (the EntryPoint calls it to settle, so a failing user op griefs the paymaster and can brick
+settlement). All three pass a happy-path test where the owner sponsors their own well-formed op.
+
+```solidity
+import {PaymasterSafetyCheck} from "account-abstraction-guard/src/checks/PaymasterSafetyCheck.sol";
+
+contract MyPaymasterSecurity is PaymasterSafetyCheck {
+    function test_paymasterSafe() public {
+        assertPaymasterSafe(IPaymaster(address(myPaymaster)));
+    }
+}
+```
+
+`assertPaymasterSafe` drives each property directly and names the offender: it validates as a
+stranger (gating), offers an absurd `maxCost` as the EntryPoint (bounds), and calls `postOp` in
+both `opSucceeded` and `opReverted` modes (no-revert). The reference set proves each flag bites —
+a distinct broken paymaster for gating, bounds, and griefing, plus a safe one that passes all three.
+
 ## Roadmap (grant milestones)
 
-1. **Paymaster safety** — `validatePaymasterUserOp` must bound what it sponsors and be gated to the
-   EntryPoint; `postOp` must not revert (griefing). Good/broken paymaster references.
-2. **Nonce / replay** — the account uses the EntryPoint's 2D nonce; a UserOp can't be replayed.
-3. **Session-key scoping & ERC-7702 delegate context** — a session key / 7702 delegate is bounded
+The three shipped checks are the foundation. The suite this grows into:
+
+4. **Nonce / replay** — the account uses the EntryPoint's 2D nonce; a UserOp can't be replayed.
+5. **Session-key scoping & ERC-7702 delegate context** — a session key / 7702 delegate is bounded
    to its intended permissions and can't be driven by an unauthorized caller (the class of bug in
    real 7702 wallets and the ENS smart-account session design).
 
