@@ -106,13 +106,35 @@ contract MyAccountReplay is ReplayProtectionCheck {
 and asserts the second has no effect. The reference pair proves it: the nonce-consuming account runs
 the op exactly once; the one that skips the nonce runs the same signed op twice.
 
+### 5. Session-key / 7702-delegate scoping  ✅ available
+
+A session key (or a 7702 delegate's scoped signer) is handed out precisely because it is *not* the
+owner: it may call one target, one function, up to a cap, until an expiry. If the account verifies the
+session key's signature but doesn't enforce the scope, the "limited" key is really the master key — it
+can call any target and any function, i.e. drain the account. The grant looks correct and the intended
+action works; only an out-of-scope call exposes it.
+
+```solidity
+import {SessionKeyScopeCheck, ISessionExecutable} from "account-abstraction-guard/src/checks/SessionKeyScopeCheck.sol";
+
+contract MyAccountScope is SessionKeyScopeCheck {
+    function test_sessionKeyScoped() public {
+        assertSessionKeyScoped(
+            ISessionExecutable(address(myAccount)), sessionKey,
+            inScopeTarget, inScopeCalldata, outOfScopeTarget, outOfScopeCalldata
+        );
+    }
+}
+```
+
+`assertSessionKeyScoped` drives the account with the session key twice — the in-scope call must work,
+the out-of-scope call must be rejected. The reference pair proves it: the scoped account runs only the
+allowed target/selector; the unscoped one lets the session key reach a forbidden target.
+
 ## Roadmap (grant milestones)
 
-The four shipped checks are the foundation. The suite this grows into:
-
-5. **Session-key scoping & ERC-7702 delegate context** — a session key / 7702 delegate is bounded
-   to its intended permissions and can't be driven by an unauthorized caller (the class of bug in
-   real 7702 wallets and the ENS smart-account session design).
+The five shipped checks cover the account and paymaster footgun set. Next: a `guard-ci` CI action +
+scaffolder integration and worked wallet/paymaster examples to drive adoption.
 
 ## Why
 
