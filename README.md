@@ -83,11 +83,33 @@ stranger (gating), offers an absurd `maxCost` as the EntryPoint (bounds), and ca
 both `opSucceeded` and `opReverted` modes (no-revert). The reference set proves each flag bites —
 a distinct broken paymaster for gating, bounds, and griefing, plus a safe one that passes all three.
 
+### 4. Replay protection on a signed relayed path  ✅ available
+
+**The relayed-account footgun.** The EntryPoint's 2D nonce protects the standard `validateUserOp`
+flow — but 7702 delegates and modular accounts also expose a direct, off-chain-signed path
+(`executeWithSig`-style) for gasless/relayed actions that bypasses it. That path must consume a nonce
+itself. An account that verifies the owner's signature but never records the nonce lets any relayer
+resubmit the same signed payload again and again: a signed "send 1 ETH" becomes "send it every
+block". The owner signed once; a happy-path test that relays once never sees it.
+
+```solidity
+import {ReplayProtectionCheck, IRelayExecutable} from "account-abstraction-guard/src/checks/ReplayProtectionCheck.sol";
+
+contract MyAccountReplay is ReplayProtectionCheck {
+    function test_noReplay() public {
+        assertNoReplay(IRelayExecutable(address(myAccount)), ownerKey, address(counterTarget));
+    }
+}
+```
+
+`assertNoReplay` relays a signed op once (it must take effect), relays the identical payload again,
+and asserts the second has no effect. The reference pair proves it: the nonce-consuming account runs
+the op exactly once; the one that skips the nonce runs the same signed op twice.
+
 ## Roadmap (grant milestones)
 
-The three shipped checks are the foundation. The suite this grows into:
+The four shipped checks are the foundation. The suite this grows into:
 
-4. **Nonce / replay** — the account uses the EntryPoint's 2D nonce; a UserOp can't be replayed.
 5. **Session-key scoping & ERC-7702 delegate context** — a session key / 7702 delegate is bounded
    to its intended permissions and can't be driven by an unauthorized caller (the class of bug in
    real 7702 wallets and the ENS smart-account session design).
